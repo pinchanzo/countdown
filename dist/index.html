@@ -244,6 +244,7 @@ function ensureDevResetButton() {
   btn.id = "resetShameBtn";
   btn.innerText = "DEV: RESET SHAME";
   // append last so it's above everything
+  document.body.appendChild(btn);
 
   btn.addEventListener("click", () => {
     localStorage.removeItem("shamed");
