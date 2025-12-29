@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Countdown</title>
+
+<style>
+  body {
+    margin: 0;
+    background: black;
+    color: white;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+  }
+
+  #main {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    font-size: 3rem;
+    text-align: center;
+  }
+
+  .hidden-highlight {
+    color: black;
+    user-select: text;
+    font-size: 1rem;
+    margin-top: 20px;
+  }
+  .hidden-highlight::selection {
+    color: white;
+    background: #333;
+  }
+
+  iframe {
+    width: 80vw;
+    height: 45vw;
+    max-width: 960px;
+    max-height: 540px;
+    border: none;
+  }
+
+  #konamiModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.95);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 9999;
+    font-size: 1.5rem;
+  }
+
+  #konamiModal input {
+    font-size: 1.2rem;
+    padding: 10px;
+    margin-top: 10px;
+  }
+
+  #answerMsg {
+    margin-top: 15px;
+    font-size: 2.5rem;
+  }
+
+  #shameScreen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: black;
+    color: red;
+    font-family: serif;
+    font-size: 3rem;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    z-index: 20000;
+  }
+
+  #inspectKill {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: black;
+    color: red;
+    font-size: 2rem;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  }
+
+  canvas.confetti {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 30000;
+  }
+
+  /* Dev reset styling — kept subtle */
+  #resetShameBtn {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    background: #111;
+    color: #666;
+    border: 1px solid #333;
+    cursor: pointer;
+    opacity: 0.6;
+    z-index: 60001; /* higher than shame */
+  }
+  #resetShameBtn:hover {
+    opacity: 1;
+    color: white;
+  }
+</style>
+</head>
+
+<body>
+
+<div id="main">
+  <div id="countdown"></div>
+  <span class="hidden-highlight">you weren’t supposed to find this</span>
+</div>
+
+<div id="konamiModal">
+  <div id="konamiQuestion">What day did we first meet?</div>
+  <input type="date" id="dateInput">
+  <div id="answerMsg"></div>
+</div>
+
+<div id="shameScreen"></div>
+<div id="inspectKill">Inspecting ruins surprises.</div>
+
+<script>
+
+/* ====== COUNTDOWN ====== */
+const targetDate = new Date("January 4, 2026 00:00:00").getTime();
+const countdownEl = document.getElementById("countdown");
+
+const countdownTimer = setInterval(() => {
+  const now = Date.now();
+  const diff = targetDate - now;
+
+  if (diff <= 0) {
+    clearInterval(countdownTimer);
+    countdownEl.innerHTML = `
+      <iframe
+        src="https://www.youtube.com/embed/VIDEO_ID_HERE?autoplay=1"
+        allow="autoplay; encrypted-media"
+        allowfullscreen>
+      </iframe>
+    `;
+    return;
+  }
+
+  const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+  const m = Math.floor((diff / (1000 * 60)) % 60);
+  const s = Math.floor((diff / 1000) % 60);
+
+  countdownEl.textContent = `${d}d ${h}h ${m}m ${s}s`;
+}, 1000);
+
+/* ====== INSPECT DETECTION ====== */
+(function () {
+  const threshold = 160;
+  setInterval(() => {
+    if (
+      window.outerWidth - window.innerWidth > threshold ||
+      window.outerHeight - window.innerHeight > threshold
+    ) {
+      document.body.innerHTML = "";
+      // append inspect-kill message (styles still in head)
+      const ik = document.getElementById("inspectKill");
+      if (ik) {
+        ik.style.display = "flex";
+        document.body.appendChild(ik);
+      }
+      // ensure dev reset is available
+      ensureDevResetButton();
+    }
+  }, 500);
+
+  setInterval(() => { debugger; }, 100);
+})();
+
+/* ====== SHAME STATE ====== */
+let reloads = Number(localStorage.getItem("shameReloads") || 0);
+let shamed = localStorage.getItem("shamed") === "true";
+
+if (shamed) showShame(reloads > 0);
+
+function triggerShame() {
+  localStorage.setItem("shamed", "true");
+  localStorage.setItem("chanceBurned", "true"); // permanent
+  localStorage.setItem("shameReloads", "0");
+  showShame(false);
+}
+
+function showShame(fromReload) {
+  const shame = document.getElementById("shameScreen");
+  shame.style.display = "flex";
+  shame.textContent = fromReload
+    ? "...thought you could run away from the shame?"
+    : "SHAME";
+
+  // clear body and append the shame node (styles stay in head)
+  document.body.innerHTML = "";
+  document.body.appendChild(shame);
+
+  // Always ensure the dev reset button exists so you can escape for testing
+  ensureDevResetButton();
+}
+
+window.addEventListener("load", () => {
+  if (shamed) {
+    reloads++;
+    localStorage.setItem("shameReloads", reloads);
+
+    if (reloads >= 5) {
+      // mercy: clear temporary shamed flag, but keep chanceBurned permanently
+      localStorage.removeItem("shamed");
+      localStorage.removeItem("shameReloads");
+      location.reload();
+    } else {
+      // If still in the reload punishment window, ensure reset exists in case dev wants it
+      ensureDevResetButton();
+    }
+  } else {
+    // if not shamed, ensure dev reset button is present for testing convenience
+    ensureDevResetButton();
+  }
+});
+
+/* ====== DEV RESET BUTTON (created dynamically so it survives body clears) ====== */
+function ensureDevResetButton() {
+  if (document.getElementById("resetShameBtn")) return;
+
+  const btn = document.createElement("button");
+  btn.id = "resetShameBtn";
+  btn.innerText = "DEV: RESET SHAME";
+  // append last so it's above everything
+  document.body.appendChild(btn);
+
+  btn.addEventListener("click", () => {
+    localStorage.removeItem("shamed");
+    localStorage.removeItem("shameReloads");
+    localStorage.removeItem("chanceBurned");
+
+    // quick feedback and reload to restore normal UI
+    alert("Shame reset. Behave this time.");
+    location.reload();
+  });
+}
+
+/* ====== KONAMI CODE ====== */
+const konami = [
+  "ArrowUp","ArrowUp","ArrowDown","ArrowDown",
+  "ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"
+];
+let buffer = [];
+
+window.addEventListener("keydown", e => {
+  buffer.push(e.key);
+  if (buffer.length > konami.length) buffer.shift();
+
+  if (konami.every((k, i) => k === buffer[i])) {
+    openKonami();
+    buffer = [];
+  }
+});
+
+function openKonami() {
+  if (localStorage.getItem("chanceBurned") === "true") {
+    alert("you wasted your chance");
+    return;
+  }
+
+  const modal = document.getElementById("konamiModal");
+  const input = document.getElementById("dateInput");
+  const msg = document.getElementById("answerMsg");
+  const question = document.getElementById("konamiQuestion");
+
+  modal.style.display = "flex";
+  input.valueAsDate = new Date();
+
+  input.onchange = () => {
+    // avoid timezone problems by parsing the value directly
+    const [year, month, day] = input.value.split("-").map(Number);
+
+    if (year === 2025 && month === 10 && day === 27) {
+      question.style.display = "none";
+      input.style.display = "none";
+      msg.textContent = "Good girl !!";
+      launchConfetti();
+    } else {
+      triggerShame();
+    }
+  };
+}
+
+/* ====== CONFETTI (spawns then stops, lets pieces fall naturally) ====== */
+function launchConfetti() {
+  const canvas = document.createElement("canvas");
+  canvas.className = "confetti";
+  document.body.appendChild(canvas);
+
+  const ctx = canvas.getContext("2d");
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+
+  let pieces = [];
+  let spawning = true;
+  let frames = 0;
+
+  function spawnPiece() {
+    pieces.push({
+      x: Math.random() * canvas.width,
+      y: -20,
+      r: Math.random() * 6 + 4,
+      vx: Math.random() * 2 - 1,
+      vy: Math.random() * 3 + 2,
+      rot: Math.random() * Math.PI,
+      vr: Math.random() * 0.1 - 0.05,
+      c: `hsl(${Math.random() * 360},100%,60%)`
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Spawn for first ~3 seconds
+    if (spawning && frames < 180) {
+      for (let i = 0; i < 5; i++) spawnPiece();
+    } else {
+      spawning = false;
+    }
+
+    pieces.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vr;
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.r / 2, -p.r / 2, p.r, p.r);
+      ctx.restore();
+    });
+
+    // Remove pieces that fell off-screen
+    pieces = pieces.filter(p => p.y < canvas.height + 50);
+
+    frames++;
+
+    // End only when nothing is left AND spawning stopped
+    if (pieces.length > 0 || spawning) {
+      requestAnimationFrame(draw);
+    } else {
+      canvas.remove();
+    }
+  }
+
+  draw();
+}
+</script>
+
+</body>
+</html>
