@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8" />
 <title>Countdown</title>
+
+<!-- Digital font for the "shut your eyes" text -->
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 
 <style>
   body {
@@ -112,9 +115,121 @@
     opacity: 0.6;
     z-index: 60001; /* higher than shame */
   }
-  #resetShameBtn:hover {
+  #resetShameBtn:hover { opacity: 1; color: white; }
+
+  /* TEMP test button styling */
+  #tempSet5dBtn {
+    position: fixed;
+    bottom: 50px;
+    right: 10px;
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    background: #111;
+    color: #aaa;
+    border: 1px solid #333;
+    cursor: pointer;
+    opacity: 0.8;
+    z-index: 60000;
+  }
+  #tempSet5dBtn:hover { color: white; }
+
+  /* Majora style overlay */
+  #mmOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 40000;
+    text-align: center;
+    pointer-events: auto;
+  }
+  #mmOverlay h1 {
+    font-size: 6rem;
+    margin: 0;
+    color: #ff2222; /* red */
+    text-shadow: 0 0 10px rgba(255,0,0,0.6), 0 0 30px rgba(255,0,0,0.25);
+    animation: pulse 1.2s infinite;
+    letter-spacing: 0.2rem;
+  }
+
+  /* container for the per-letter elements */
+  #mmOverlay .mm-text-wrap {
+    margin-top: 10px;
+    display: inline-block;
+  }
+
+  /* the visible glyph (main layer) */
+  .mm-letter {
+    display: inline-block;
+    position: relative;
+    transition: opacity 280ms linear, transform 280ms linear, filter 280ms linear;
     opacity: 1;
-    color: white;
+    transform-origin: center;
+    will-change: opacity, transform;
+    font-family: 'Orbitron', sans-serif; /* digital font */
+    font-weight: 700;
+    font-size: 3rem; /* final size */
+    letter-spacing: 0.06em;
+    color: #ff9a9a;
+    text-shadow:
+      0 0 6px rgba(255,100,100,0.24),
+      0 0 18px rgba(255,60,60,0.10),
+      0 0 36px rgba(255,20,20,0.06);
+    line-height: 1;
+  }
+
+  /* inner visible char */
+  .mm-ch {
+    display: inline-block;
+    transition: opacity 220ms linear, transform 220ms linear;
+    opacity: 1;
+  }
+
+  /* ghost layer — sits under/over the glyph, blurred and glowy */
+  .mm-ghost {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+    color: #ff7b7b;
+    transform-origin: center;
+    font-family: inherit;
+    font-weight: inherit;
+    font-size: inherit;
+    letter-spacing: inherit;
+    opacity: 0.12;
+    filter: blur(2px);
+    transition: opacity 700ms ease, filter 700ms ease, transform 700ms ease;
+    z-index: -1;
+    text-shadow:
+      0 0 24px rgba(255,80,80,0.7),
+      0 0 48px rgba(255,40,40,0.45);
+  }
+
+  /* states for visible/hidden */
+  .mm-letter.hidden .mm-ch { opacity: 0; transform: translateY(-3px) scale(0.98); }
+  .mm-letter.hidden { transform: translateY(-1px); }
+
+  /* ghost stronger when letter just died */
+  .ghost-strong { opacity: 0.6 !important; filter: blur(6px) !important; transform: scale(1.03); }
+  /* ghost dim final resting faint glow */
+  .ghost-dim { opacity: 0.12 !important; filter: blur(2px) !important; transform: scale(1); }
+
+  .mm-space { display: inline-block; width: 14px; } /* keep spaces stable */
+
+  @keyframes pulse {
+    0% { transform: scale(1); filter: blur(0px); }
+    50% { transform: scale(1.03); filter: blur(0.6px); }
+    100% { transform: scale(1); filter: blur(0px); }
+  }
+
+  /* responsive tweak so overlay doesn't overflow */
+  @media (max-width: 600px) {
+    .mm-letter { font-size: 2rem; }
+    #mmOverlay h1 { font-size: 3rem; }
   }
 </style>
 </head>
@@ -135,15 +250,37 @@
 <div id="shameScreen"></div>
 <div id="inspectKill">Inspecting ruins surprises.</div>
 
+<!-- Majora's Mask style overlay -->
+<div id="mmOverlay">
+  <h1>5 DAYS REMAINING</h1>
+  <div class="mm-text-wrap"><!-- per-letter spans injected here --></div>
+</div>
+
 <script>
+/* ====== CONFIG ====== */
+let targetDate = new Date("January 4, 2026 00:00:00").getTime(); // can be changed by test button
+const MM_DISPLAY_MS = 2 * 60 * 1000; // show overlay for 2 minutes (120000 ms)
+let mmDisplayed = false; // session-only guard, toggled by test button too
 
-/* ====== COUNTDOWN ====== */
-const targetDate = new Date("January 4, 2026 00:00:00").getTime();
+/* ====== COUNTDOWN (refactor so we can re-target) ====== */
 const countdownEl = document.getElementById("countdown");
+let countdownTimer = null;
 
-const countdownTimer = setInterval(() => {
+function startCountdown() {
+  if (countdownTimer) clearInterval(countdownTimer);
+  updateCountdown();
+  countdownTimer = setInterval(updateCountdown, 1000);
+}
+
+function updateCountdown() {
   const now = Date.now();
   const diff = targetDate - now;
+
+  const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+  if (!mmDisplayed && diff <= fiveDaysMs && diff > 0) {
+    showMajoraOverlay();
+    mmDisplayed = true;
+  }
 
   if (diff <= 0) {
     clearInterval(countdownTimer);
@@ -163,7 +300,162 @@ const countdownTimer = setInterval(() => {
   const s = Math.floor((diff / 1000) % 60);
 
   countdownEl.textContent = `${d}d ${h}h ${m}m ${s}s`;
-}, 1000);
+}
+
+startCountdown();
+
+/* ====== Majora overlay + dead-light flicker ====== */
+const mmOverlay = document.getElementById('mmOverlay');
+const mmWrap = mmOverlay.querySelector('.mm-text-wrap');
+const MM_TEXT = 'shut your eyes';
+let mmTimeout = null;
+let flickerAnimationId = null;
+let flickerLetters = []; // array of {elMain, elGhost, visible, nextToggle, ghostTimer}
+
+function createPerLetterElements() {
+  mmWrap.innerHTML = '';
+  flickerLetters = [];
+
+  for (let ch of MM_TEXT) {
+    if (ch === ' ') {
+      const sp = document.createElement('span');
+      sp.className = 'mm-space';
+      sp.innerHTML = '&nbsp;';
+      mmWrap.appendChild(sp);
+      continue;
+    }
+
+    const outer = document.createElement('span');
+    outer.className = 'mm-letter';
+
+    const main = document.createElement('span');
+    main.className = 'mm-ch';
+    main.textContent = ch;
+
+    const ghost = document.createElement('span');
+    ghost.className = 'mm-ghost';
+    ghost.textContent = ch;
+
+    outer.appendChild(ghost);
+    outer.appendChild(main);
+    mmWrap.appendChild(outer);
+
+    flickerLetters.push({
+      outer,
+      elMain: main,
+      elGhost: ghost,
+      visible: true,
+      nextToggle: Date.now() + randMs(700, 3200),
+      ghostTimer: null
+    });
+  }
+}
+
+function randMs(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function startFlicker() {
+  if (flickerAnimationId) return;
+  if (!flickerLetters.length) createPerLetterElements();
+
+  function tick() {
+    const now = Date.now();
+
+    for (let item of flickerLetters) {
+      if (now >= item.nextToggle) {
+        if (item.visible) {
+          if (Math.random() < 0.10) {
+            // letter dies: hide main quickly, make ghost strong and schedule decay
+            item.visible = false;
+            item.elMain.classList.add('hidden');
+            item.outer.classList.add('hidden');
+
+            // clear old ghost timer if exists
+            if (item.ghostTimer) {
+              clearTimeout(item.ghostTimer);
+              item.ghostTimer = null;
+            }
+
+            // ghost strong immediately (bright dead-light)
+            item.elGhost.classList.remove('ghost-dim');
+            item.elGhost.classList.add('ghost-strong');
+
+            // schedule ghost to settle to dim after a short while
+            item.ghostTimer = setTimeout(() => {
+              item.elGhost.classList.remove('ghost-strong');
+              item.elGhost.classList.add('ghost-dim');
+              item.ghostTimer = null;
+            }, randMs(600, 1400));
+
+            item.nextToggle = now + randMs(900, 3500); // next chance to come back
+          } else {
+            item.nextToggle = now + randMs(1000, 4000);
+          }
+        } else {
+          // currently hidden: high chance to return visible
+          if (Math.random() < 0.85) {
+            item.visible = true;
+            item.elMain.classList.remove('hidden');
+            item.outer.classList.remove('hidden');
+
+            // when returning, keep the ghost dim but subtle for a bit
+            if (item.ghostTimer) {
+              clearTimeout(item.ghostTimer);
+              item.ghostTimer = null;
+            }
+            item.elGhost.classList.remove('ghost-strong');
+            item.elGhost.classList.add('ghost-dim');
+
+            item.nextToggle = now + randMs(1200, 4200);
+          } else {
+            // remain hidden a bit longer; ghost stays dim
+            item.nextToggle = now + randMs(800, 2800);
+          }
+        }
+      }
+    }
+
+    flickerAnimationId = requestAnimationFrame(tick);
+  }
+
+  flickerAnimationId = requestAnimationFrame(tick);
+}
+
+function stopFlickerAndRestore() {
+  if (flickerAnimationId) {
+    cancelAnimationFrame(flickerAnimationId);
+    flickerAnimationId = null;
+  }
+  // clear timers and restore glyphs
+  for (let item of flickerLetters) {
+    if (item.ghostTimer) {
+      clearTimeout(item.ghostTimer);
+      item.ghostTimer = null;
+    }
+    item.visible = true;
+    if (item.elMain) item.elMain.classList.remove('hidden');
+    if (item.outer) item.outer.classList.remove('hidden');
+    if (item.elGhost) {
+      item.elGhost.classList.remove('ghost-strong');
+      item.elGhost.classList.add('ghost-dim');
+    }
+  }
+}
+
+/* show overlay and start flicker */
+function showMajoraOverlay() {
+  mmOverlay.style.display = 'flex';
+  mmOverlay.style.zIndex = 40000;
+  createPerLetterElements();
+  startFlicker();
+
+  if (mmTimeout) clearTimeout(mmTimeout);
+  mmTimeout = setTimeout(() => {
+    mmOverlay.style.display = 'none';
+    stopFlickerAndRestore();
+  }, MM_DISPLAY_MS);
+}
 
 /* ====== INSPECT DETECTION ====== */
 (function () {
@@ -173,14 +465,12 @@ const countdownTimer = setInterval(() => {
       window.outerWidth - window.innerWidth > threshold ||
       window.outerHeight - window.innerHeight > threshold
     ) {
-      document.body.innerHTML = "";
-      // append inspect-kill message (styles still in head)
-      const ik = document.getElementById("inspectKill");
+      document.body.innerHTML = '';
+      const ik = document.getElementById('inspectKill');
       if (ik) {
-        ik.style.display = "flex";
+        ik.style.display = 'flex';
         document.body.appendChild(ik);
       }
-      // ensure dev reset is available
       ensureDevResetButton();
     }
   }, 500);
@@ -190,84 +480,93 @@ const countdownTimer = setInterval(() => {
 
 /* ====== SHAME STATE ====== */
 let reloads = Number(localStorage.getItem("shameReloads") || 0);
-let shamed = localStorage.getItem("shamed") === "true";
+let shamed = localStorage.getItem("shamed") === 'true';
 
 if (shamed) showShame(reloads > 0);
 
 function triggerShame() {
-  localStorage.setItem("shamed", "true");
-  localStorage.setItem("chanceBurned", "true"); // permanent
-  localStorage.setItem("shameReloads", "0");
+  localStorage.setItem('shamed', 'true');
+  localStorage.setItem('chanceBurned', 'true'); // permanent
+  localStorage.setItem('shameReloads', '0');
   showShame(false);
 }
 
 function showShame(fromReload) {
-  const shame = document.getElementById("shameScreen");
-  shame.style.display = "flex";
-  shame.textContent = fromReload
-    ? "...thought you could run away from the shame?"
-    : "SHAME";
-
-  // clear body and append the shame node (styles stay in head)
-  document.body.innerHTML = "";
+  const shame = document.getElementById('shameScreen');
+  shame.style.display = 'flex';
+  shame.textContent = fromReload ? '...thought you could run away from the shame?' : 'SHAME';
+  document.body.innerHTML = '';
   document.body.appendChild(shame);
-
-  // Always ensure the dev reset button exists so you can escape for testing
   ensureDevResetButton();
 }
 
-window.addEventListener("load", () => {
+window.addEventListener('load', () => {
   if (shamed) {
     reloads++;
-    localStorage.setItem("shameReloads", reloads);
+    localStorage.setItem('shameReloads', reloads);
 
     if (reloads >= 5) {
-      // mercy: clear temporary shamed flag, but keep chanceBurned permanently
-      localStorage.removeItem("shamed");
-      localStorage.removeItem("shameReloads");
+      localStorage.removeItem('shamed');
+      localStorage.removeItem('shameReloads');
       location.reload();
     } else {
-      // If still in the reload punishment window, ensure reset exists in case dev wants it
       ensureDevResetButton();
     }
   } else {
-    // if not shamed, ensure dev reset button is present for testing convenience
     ensureDevResetButton();
   }
 });
 
-/* ====== DEV RESET BUTTON (created dynamically so it survives body clears) ====== */
+/* ====== DEV RESET BUTTON ====== */
 function ensureDevResetButton() {
-  if (document.getElementById("resetShameBtn")) return;
+    return;
+//   if (document.getElementById('resetShameBtn')) return;
 
-  const btn = document.createElement("button");
-  btn.id = "resetShameBtn";
-  btn.innerText = "DEV: RESET SHAME";
-  // append last so it's above everything
-  document.body.appendChild(btn);
+//   const btn = document.createElement('button');
+//   btn.id = 'resetShameBtn';
+//   btn.innerText = 'DEV: RESET SHAME';
+//   document.body.appendChild(btn);
 
-  btn.addEventListener("click", () => {
-    localStorage.removeItem("shamed");
-    localStorage.removeItem("shameReloads");
-    localStorage.removeItem("chanceBurned");
+//   btn.addEventListener('click', () => {
+//     localStorage.removeItem('shamed');
+//     localStorage.removeItem('shameReloads');
+//     localStorage.removeItem('chanceBurned');
+//     alert('Shame reset. Behave this time.');
+//     location.reload();
+//   });
 
-    // quick feedback and reload to restore normal UI
-    alert("Shame reset. Behave this time.");
-    location.reload();
-  });
+//   ensureTempTestButton();
 }
 
-/* ====== KONAMI CODE ====== */
+/* ====== TEMP: Test button to set timer to 5 days + 30s ====== */
+function ensureTempTestButton() {
+    return;
+//   if (document.getElementById('tempSet5dBtn')) return;
+
+//   const tbtn = document.createElement('button');
+//   tbtn.id = 'tempSet5dBtn';
+//   tbtn.innerText = 'TEMP: Set timer to 5d + 30s (TEST)';
+//   document.body.appendChild(tbtn);
+
+//   tbtn.addEventListener('click', () => {
+//     const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+//     targetDate = Date.now() + fiveDaysMs + 30 * 1000;
+//     mmDisplayed = false; // allow overlay to trigger again for test
+//     startCountdown();
+//     alert('Timer set to 5 days + 30 seconds for testing. Wait ~30s to see overlay trigger.');
+//   });
+}
+
+/* ====== KONAMI (unchanged) ====== */
 const konami = [
-  "ArrowUp","ArrowUp","ArrowDown","ArrowDown",
-  "ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"
+  'ArrowUp','ArrowUp','ArrowDown','ArrowDown',
+  'ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'
 ];
 let buffer = [];
 
-window.addEventListener("keydown", e => {
+window.addEventListener('keydown', e => {
   buffer.push(e.key);
   if (buffer.length > konami.length) buffer.shift();
-
   if (konami.every((k, i) => k === buffer[i])) {
     openKonami();
     buffer = [];
@@ -275,27 +574,25 @@ window.addEventListener("keydown", e => {
 });
 
 function openKonami() {
-  if (localStorage.getItem("chanceBurned") === "true") {
-    alert("you wasted your chance");
+  if (localStorage.getItem('chanceBurned') === 'true') {
+    alert('you wasted your chance');
     return;
   }
 
-  const modal = document.getElementById("konamiModal");
-  const input = document.getElementById("dateInput");
-  const msg = document.getElementById("answerMsg");
-  const question = document.getElementById("konamiQuestion");
+  const modal = document.getElementById('konamiModal');
+  const input = document.getElementById('dateInput');
+  const msg = document.getElementById('answerMsg');
+  const question = document.getElementById('konamiQuestion');
 
-  modal.style.display = "flex";
+  modal.style.display = 'flex';
   input.valueAsDate = new Date();
 
   input.onchange = () => {
-    // avoid timezone problems by parsing the value directly
-    const [year, month, day] = input.value.split("-").map(Number);
-
+    const [year, month, day] = input.value.split('-').map(Number);
     if (year === 2025 && month === 10 && day === 27) {
-      question.style.display = "none";
-      input.style.display = "none";
-      msg.textContent = "Good girl !!";
+      question.style.display = 'none';
+      input.style.display = 'none';
+      msg.textContent = 'Good girl !!';
       launchConfetti();
     } else {
       triggerShame();
@@ -303,13 +600,13 @@ function openKonami() {
   };
 }
 
-/* ====== CONFETTI (spawns then stops, lets pieces fall naturally) ====== */
+/* ====== CONFETTI (unchanged) ====== */
 function launchConfetti() {
-  const canvas = document.createElement("canvas");
-  canvas.className = "confetti";
+  const canvas = document.createElement('canvas');
+  canvas.className = 'confetti';
   document.body.appendChild(canvas);
 
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext('2d');
   canvas.width = innerWidth;
   canvas.height = innerHeight;
 
@@ -333,7 +630,6 @@ function launchConfetti() {
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Spawn for first ~3 seconds
     if (spawning && frames < 180) {
       for (let i = 0; i < 5; i++) spawnPiece();
     } else {
@@ -353,12 +649,9 @@ function launchConfetti() {
       ctx.restore();
     });
 
-    // Remove pieces that fell off-screen
     pieces = pieces.filter(p => p.y < canvas.height + 50);
-
     frames++;
 
-    // End only when nothing is left AND spawning stopped
     if (pieces.length > 0 || spawning) {
       requestAnimationFrame(draw);
     } else {
